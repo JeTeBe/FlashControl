@@ -1,152 +1,177 @@
-/*********
-  Rui Santos
-  Complete project details at https://randomnerdtutorials.com  
-*********/
+//This example code is in the Public Domain (or CC0 licensed, at your option.)
+//By Evandro Copercini - 2018
+//
+//This example creates a bridge between Serial and Classical Bluetooth (SPP)
+//and also demonstrate that SerialBT have the same functionalities of a normal Serial
 
-// Load Wi-Fi library
-#include <WiFi.h>
+#include "BluetoothSerial.h"
 
-// Replace with your network credentials
-const char* ssid     = "FLASHCONTROL";
-const char* password = "FLASHCONTROL";
+// TFT start 
+#include <TFT_eSPI.h> // Graphics and font library for ST7735 driver chip
+#include <SPI.h>
 
-// Set web server port number to 80
-WiFiServer server(80);
+TFT_eSPI tft = TFT_eSPI();  // Invoke library, pins defined in User_Setup.h
 
-// Variable to store the HTTP request
-String header;
+//#define USE_PIN // Uncomment this to use PIN during pairing. The pin is specified on the line below
+const char *pin = "1234"; // Change this to more secure PIN.
 
-// Auxiliar variables to store the current output state
-String output26State = "off";
-String output27State = "off";
-int    flashStrength = 1;
+String device_name = "FLASHCONTROL1";
+int led = 0;
+int interval = 0;
+String sendStr = "";
+uint8_t dimLevel = 75;
+uint8_t oldDimLevel = 0;
+uint8_t level = 75;
 
+#if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
+#error Bluetooth is not enabled! Please run `make menuconfig` to and enable it
+#endif
 
-// Assign output variables to GPIO pins
-const int output26 = 26;
-const int output27 = 27;
+#if !defined(CONFIG_BT_SPP_ENABLED)
+#error Serial Bluetooth not available or not enabled. It is only available for the ESP32 chip.
+#endif
+
+BluetoothSerial SerialBT;
 
 void setup() {
   Serial.begin(115200);
-  // Initialize the output variables as outputs
-  pinMode(output26, OUTPUT);
-  pinMode(output27, OUTPUT);
-  // Set outputs to LOW
-  digitalWrite(output26, LOW);
-  digitalWrite(output27, LOW);
+  SerialBT.begin(device_name); //Bluetooth device name
+  Serial.printf("The device with name \"%s\" is started.\nNow you can pair it with Bluetooth!\n", device_name.c_str());
+  //Serial.printf("The device with name \"%s\" and MAC address %s is started.\nNow you can pair it with Bluetooth!\n", device_name.c_str(), SerialBT.getMacString()); // Use this after the MAC method is implemented
+  #ifdef USE_PIN
+    SerialBT.setPin(pin);
+    Serial.println("Using PIN");
+  #endif
 
-  // Connect to Wi-Fi network with SSID and password
-  Serial.print("Setting AP (Access Point)…");
-  // Remove the password parameter, if you want the AP (Access Point) to be open
-  WiFi.softAP(ssid, password);
-
-  IPAddress IP = WiFi.softAPIP();
-  Serial.print("AP IP address: ");
-  Serial.println(IP);
-  
-  server.begin();
+  tft.init();
+  tft.setRotation(1);
+  tft.setTextSize(3);
+  tft.fillScreen(TFT_BLUE);
+  tft.setTextColor(TFT_WHITE, TFT_BLUE);  // Adding a black background colour erases previous text automatically
+  tft.setCursor( 0, 0);
+  tft.print(String(device_name));
+  tft.setTextSize(7);
 }
 
-void loop(){
-  WiFiClient client = server.available();   // Listen for incoming clients
+char* ConvertStringToCharArray(String S)
+{
+  int   ArrayLength  =S.length()+1;    //The +1 is for the 0x00h Terminator
+  char  CharArray[ArrayLength];
+  S.toCharArray(CharArray,ArrayLength);
 
-  if (client) {                             // If a new client connects,
-    Serial.println("New Client.");          // print a message out in the serial port
-    String currentLine = "";                // make a String to hold incoming data from the client
-    while (client.connected()) {            // loop while the client's connected
-      if (client.available()) {             // if there's bytes to read from the client,
-        char c = client.read();             // read a byte, then
-        Serial.write(c);                    // print it out the serial monitor
-        header += c;
-        if (c == '\n') {                    // if the byte is a newline character
-          // if the current line is blank, you got two newline characters in a row.
-          // that's the end of the client HTTP request, so send a response:
-          if (currentLine.length() == 0) {
-            // HTTP headers always start with a response code (e.g. HTTP/1.1 200 OK)
-            // and a content-type so the client knows what's coming, then a blank line:
-            client.println("HTTP/1.1 200 OK");
-            client.println("Content-type:text/html");
-            client.println("Connection: close");
-            client.println();
-            for (int i = 1; i <= 100; i++)
-            {
-              if (header.indexOf("GET /" + String(i) + "/on") >= 0)
-              {
-                flashStrength = i;
-                Serial.println("Flash strength = " + String(flashStrength));
-              }
-            }
-            // turns the GPIOs on and off
-            if (header.indexOf("GET /26/on") >= 0) {
-              Serial.println("GPIO 26 on");
-              output26State = "on";
-              digitalWrite(output26, HIGH);
-            } else if (header.indexOf("GET /26/off") >= 0) {
-              Serial.println("GPIO 26 off");
-              output26State = "off";
-              digitalWrite(output26, LOW);
-            } else if (header.indexOf("GET /27/on") >= 0) {
-              Serial.println("GPIO 27 on");
-              output27State = "on";
-              digitalWrite(output27, HIGH);
-            } else if (header.indexOf("GET /27/off") >= 0) {
-              Serial.println("GPIO 27 off");
-              output27State = "off";
-              digitalWrite(output27, LOW);
-            }
-            
-            // Display the HTML web page
-            client.println("<!DOCTYPE html>");
-            client.println("<html>");
-            client.println("<head>");
-            client.println("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
-            client.println("<link rel=\"icon\" href=\"data:,\">");
-            // CSS to style the on/off buttons 
-            // Feel free to change the background-color and font-size attributes to fit your preferences
-            client.println("<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}");
-            client.println(".button { background-color: #4CAF50; border: none; color: white; padding: 10px 1px; width: 30px;");
-            client.println("text-decoration: none; font-size: 15px; margin: 2px; cursor: pointer;}");
-            client.println(".button2 {background-color: #555555;}</style></head>");
-            
-            // Web Page Heading
-            client.println("<body><h1>ESP32 Web Server</h1>");
-            client.println("<p>Flash strength = " + String(flashStrength) + "</p>");
-            for (int j = 0; j < 10; j++)
-            {
-              for (int i = 1; i <= 10; i++)
-              {
-                if (flashStrength == (j*10+i))
-                {
-                  client.println("<a href=\"/" + String(j*10+i) + "/on\"><button class=\"button\">"+String(j*10+i)+"</button></a>");
-                }
-                else
-                {
-                  client.println("<a href=\"/" + String(j*10+i) + "/on\"><button class=\"button button2\">"+String(j*10+i)+"</button></a>");
-                }
-              }
-              client.println("</br>");
+  return(CharArray);
+}
 
-            }
-            client.println("</body>");
-            client.println("</html>");
-            
-            // The HTTP response ends with another blank line
-            client.println();
-            // Break out of the while loop
-            break;
-          } else { // if you got a newline, then clear currentLine
-            currentLine = "";
-          }
-        } else if (c != '\r') {  // if you got anything else but a carriage return character,
-          currentLine += c;      // add it to the end of the currentLine
-        }
-      }
+void loop() {
+  if (interval == 30) {
+    interval = 0;
+    if (led == 0) {
+      led = 1;
+    } else {
+      led = 0;
     }
-    // Clear the header variable
-    header = "";
-    // Close the connection
-    client.stop();
-    Serial.println("Client disconnected.");
-    Serial.println("");
+    uint8_t byteArray[6] =  "led ";
+    byteArray[4] = 0x30 + led; // '0' or '1'
+    byteArray[5] = 0x0A; //LF
+    if (SerialBT.available()) {
+      SerialBT.write(byteArray, 6);
+      Serial.printf("LED %i\r",led);
+    }
+  } else {
+    interval = interval + 1;
+  }
+
+  if (Serial.available()) {
+    SerialBT.write(Serial.read());
+  }
+  if (SerialBT.available()) {
+    uint8_t receivedData = SerialBT.read();
+    ParseData(receivedData);
+  }
+  delay(20);
+  if (oldDimLevel != dimLevel)
+  {
+    // Clear oldDimLevel
+    tft.setTextColor(TFT_BLUE, TFT_BLUE);
+    tft.setCursor( 50, 50 );
+    tft.print(String(oldDimLevel));
+    // Set dimLevel
+    tft.setTextColor(TFT_WHITE, TFT_BLUE);
+    tft.setCursor( 50, 50 );
+    tft.print(String(dimLevel));
+    oldDimLevel = dimLevel;
+  }
+  //tft.setTextColor(TFT_WHITE, TFT_BLUE);  // Adding a black background colour erases previous text automatically
+  //tft.setCursor( 50, 50 );
+  //tft.print(String(dimLevel));
+//  int textSize = 3;
+//  if ((dimLevel>=10) & (dimLevel<99)) { textSize = 2; }
+//  if (dimLevel<10) { textSize = 1; }
+  
+//  tft.setCursor( 50+textSize*7, 50 );
+//  tft.setTextColor(TFT_RED, TFT_RED);  // Adding a black background colour erases previous text automatically
+//  tft.print("111");
+  
+  uint8_t ucArray[6] =  "2 000";
+  uint8_t hund = (dimLevel / 100);
+  level = dimLevel - hund * 100;
+  uint8_t dec = (level / 10);
+  level = level - dec * 10;
+  uint8_t units = level;
+  Serial.printf("dimLevel: %i = h: %i, d: %i, u: %i\r\n", dimLevel, hund, dec, units);
+  ucArray[2] = 0x30 + hund; 
+  ucArray[3] = 0x30 + dec; 
+  ucArray[4] = 0x30 + units; 
+  ucArray[5] = 0x0A; //LF
+  if (SerialBT.available()) {
+    SerialBT.write(ucArray, 6);
+  }
+}
+
+const int WAIT_FOR_SYNC = 1;
+const int GET_ID        = 2;
+const int GET_VALUE     = 3;
+
+int state = WAIT_FOR_SYNC;
+uint8_t ID = 0;
+uint8_t VALUE = 0;
+void ParseData(uint8_t inval)
+{
+  switch(state)
+  {
+    case WAIT_FOR_SYNC:
+      if (inval == 10) // LF end of message
+      {
+        state = GET_ID;
+      }
+      break;
+    case GET_ID:
+      if (inval == 32) // space end of ID
+      {
+        state = GET_VALUE;
+      }
+      else
+      {
+        ID = ID * 10 + (inval-48);  // Correct from ascii value
+      }
+      break;  
+    case GET_VALUE:
+      if (inval == 10) // LF end of value, start of next ID
+      {
+        state = GET_ID;
+        if (VALUE != dimLevel)
+        {
+          oldDimLevel = dimLevel;
+          dimLevel = VALUE;
+        }
+        // Reset for next round
+        VALUE = 0;
+        ID = 0;
+      }
+      else
+      {
+        VALUE = VALUE * 10 + (inval-48);  // Correct from ascii value
+      }
+      break;  
   }
 }
