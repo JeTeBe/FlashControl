@@ -1,223 +1,152 @@
-/*
- * Pong
- * Original Code from https://github.com/rparrett/pongclock
- *
- */
+/*********
+  Rui Santos
+  Complete project details at https://randomnerdtutorials.com  
+*********/
 
-// Demo only - not playable
+// Load Wi-Fi library
+#include <WiFi.h>
 
-#define BLACK 0x0000
-#define WHITE 0xFFFF
-#define GREY  0x5AEB
+// Replace with your network credentials
+const char* ssid     = "FLASHCONTROL";
+const char* password = "FLASHCONTROL";
 
-#include <TFT_eSPI.h> // Hardware-specific library
-#include <SPI.h>
+// Set web server port number to 80
+WiFiServer server(80);
 
-TFT_eSPI tft = TFT_eSPI();       // Invoke custom library
+// Variable to store the HTTP request
+String header;
 
-int16_t h = 240;
-int16_t w = 320;
+// Auxiliar variables to store the current output state
+String output26State = "off";
+String output27State = "off";
+int    flashStrength = 1;
 
-int dly = 5;
 
-int16_t paddle_h = 30;
-int16_t paddle_w = 4;
+// Assign output variables to GPIO pins
+const int output26 = 26;
+const int output27 = 27;
 
-int16_t lpaddle_x = 0;
-int16_t rpaddle_x = w - paddle_w;
+void setup() {
+  Serial.begin(115200);
+  // Initialize the output variables as outputs
+  pinMode(output26, OUTPUT);
+  pinMode(output27, OUTPUT);
+  // Set outputs to LOW
+  digitalWrite(output26, LOW);
+  digitalWrite(output27, LOW);
 
-int16_t lpaddle_y = 0;
-int16_t rpaddle_y = h - paddle_h;
+  // Connect to Wi-Fi network with SSID and password
+  Serial.print("Setting AP (Access Point)…");
+  // Remove the password parameter, if you want the AP (Access Point) to be open
+  WiFi.softAP(ssid, password);
 
-int16_t lpaddle_d = 1;
-int16_t rpaddle_d = -1;
-
-int16_t lpaddle_ball_t = w - w / 4;
-int16_t rpaddle_ball_t = w / 4;
-
-int16_t target_y = 0;
-
-int16_t ball_x = 2;
-int16_t ball_y = 2;
-int16_t oldball_x = 2;
-int16_t oldball_y = 2;
-
-int16_t ball_dx = 1;
-int16_t ball_dy = 1;
-
-int16_t ball_w = 6;
-int16_t ball_h = 6;
-
-int16_t dashline_h = 4;
-int16_t dashline_w = 2;
-int16_t dashline_n = h / dashline_h;
-int16_t dashline_x = w / 2 - 1;
-int16_t dashline_y = dashline_h / 2;
-
-int16_t lscore = 12;
-int16_t rscore = 4;
-
-void setup(void) {
+  IPAddress IP = WiFi.softAPIP();
+  Serial.print("AP IP address: ");
+  Serial.println(IP);
   
-  //randomSeed(analogRead(0)*analogRead(1));
-   
-  tft.init();
-
-  tft.setRotation(1);
-
-  tft.fillScreen(BLACK);
-  //tft.fillScreen(GREY);
-  
-  initgame();
-
-  tft.setTextColor(WHITE, BLACK);
-  
+  server.begin();
 }
 
-void loop() {
-  delay(dly);
+void loop(){
+  WiFiClient client = server.available();   // Listen for incoming clients
 
-  lpaddle();
-  rpaddle();
+  if (client) {                             // If a new client connects,
+    Serial.println("New Client.");          // print a message out in the serial port
+    String currentLine = "";                // make a String to hold incoming data from the client
+    while (client.connected()) {            // loop while the client's connected
+      if (client.available()) {             // if there's bytes to read from the client,
+        char c = client.read();             // read a byte, then
+        Serial.write(c);                    // print it out the serial monitor
+        header += c;
+        if (c == '\n') {                    // if the byte is a newline character
+          // if the current line is blank, you got two newline characters in a row.
+          // that's the end of the client HTTP request, so send a response:
+          if (currentLine.length() == 0) {
+            // HTTP headers always start with a response code (e.g. HTTP/1.1 200 OK)
+            // and a content-type so the client knows what's coming, then a blank line:
+            client.println("HTTP/1.1 200 OK");
+            client.println("Content-type:text/html");
+            client.println("Connection: close");
+            client.println();
+            for (int i = 1; i <= 100; i++)
+            {
+              if (header.indexOf("GET /" + String(i) + "/on") >= 0)
+              {
+                flashStrength = i;
+                Serial.println("Flash strength = " + String(flashStrength));
+              }
+            }
+            // turns the GPIOs on and off
+            if (header.indexOf("GET /26/on") >= 0) {
+              Serial.println("GPIO 26 on");
+              output26State = "on";
+              digitalWrite(output26, HIGH);
+            } else if (header.indexOf("GET /26/off") >= 0) {
+              Serial.println("GPIO 26 off");
+              output26State = "off";
+              digitalWrite(output26, LOW);
+            } else if (header.indexOf("GET /27/on") >= 0) {
+              Serial.println("GPIO 27 on");
+              output27State = "on";
+              digitalWrite(output27, HIGH);
+            } else if (header.indexOf("GET /27/off") >= 0) {
+              Serial.println("GPIO 27 off");
+              output27State = "off";
+              digitalWrite(output27, LOW);
+            }
+            
+            // Display the HTML web page
+            client.println("<!DOCTYPE html>");
+            client.println("<html>");
+            client.println("<head>");
+            client.println("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
+            client.println("<link rel=\"icon\" href=\"data:,\">");
+            // CSS to style the on/off buttons 
+            // Feel free to change the background-color and font-size attributes to fit your preferences
+            client.println("<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}");
+            client.println(".button { background-color: #4CAF50; border: none; color: white; padding: 10px 1px; width: 30px;");
+            client.println("text-decoration: none; font-size: 15px; margin: 2px; cursor: pointer;}");
+            client.println(".button2 {background-color: #555555;}</style></head>");
+            
+            // Web Page Heading
+            client.println("<body><h1>ESP32 Web Server</h1>");
+            client.println("<p>Flash strength = " + String(flashStrength) + "</p>");
+            for (int j = 0; j < 10; j++)
+            {
+              for (int i = 1; i <= 10; i++)
+              {
+                if (flashStrength == (j*10+i))
+                {
+                  client.println("<a href=\"/" + String(j*10+i) + "/on\"><button class=\"button\">"+String(j*10+i)+"</button></a>");
+                }
+                else
+                {
+                  client.println("<a href=\"/" + String(j*10+i) + "/on\"><button class=\"button button2\">"+String(j*10+i)+"</button></a>");
+                }
+              }
+              client.println("</br>");
 
-  midline();
-
-  ball();
-}
-
-void initgame() {
-  lpaddle_y = random(0, h - paddle_h);
-  rpaddle_y = random(0, h - paddle_h);
-
-  // ball is placed on the center of the left paddle
-  ball_y = lpaddle_y + (paddle_h / 2);
-  
-  calc_target_y();
-
-  midline();
-
-  tft.fillRect(0,h-26,w,239,GREY);
-
-  tft.setTextDatum(TC_DATUM);
-  tft.setTextColor(WHITE,GREY);
-  tft.drawString("TFT_eSPI example", w/2, h-26 , 4);
-}
-
-void midline() {
-
-  // If the ball is not on the line then don't redraw the line
-  if ((ball_x<dashline_x-ball_w) && (ball_x > dashline_x+dashline_w)) return;
-
-  tft.startWrite();
-
-  // Quick way to draw a dashed line
-  tft.setAddrWindow(dashline_x, 0, dashline_w, h);
-  
-  for(int16_t i = 0; i < dashline_n; i+=2) {
-    tft.pushColor(WHITE, dashline_w*dashline_h); // push dash pixels
-    tft.pushColor(BLACK, dashline_w*dashline_h); // push gap pixels
-  }
-
-  tft.endWrite();
-}
-
-void lpaddle() {
-  
-  if (lpaddle_d == 1) {
-    tft.fillRect(lpaddle_x, lpaddle_y, paddle_w, 1, BLACK);
-  } 
-  else if (lpaddle_d == -1) {
-    tft.fillRect(lpaddle_x, lpaddle_y + paddle_h - 1, paddle_w, 1, BLACK);
-  }
-
-  lpaddle_y = lpaddle_y + lpaddle_d;
-
-  if (ball_dx == 1) lpaddle_d = 0;
-  else {
-    if (lpaddle_y + paddle_h / 2 == target_y) lpaddle_d = 0;
-    else if (lpaddle_y + paddle_h / 2 > target_y) lpaddle_d = -1;
-    else lpaddle_d = 1;
-  }
-
-  if (lpaddle_y + paddle_h >= h && lpaddle_d == 1) lpaddle_d = 0;
-  else if (lpaddle_y <= 0 && lpaddle_d == -1) lpaddle_d = 0;
-
-  tft.fillRect(lpaddle_x, lpaddle_y, paddle_w, paddle_h, WHITE);
-}
-
-void rpaddle() {
-  
-  if (rpaddle_d == 1) {
-    tft.fillRect(rpaddle_x, rpaddle_y, paddle_w, 1, BLACK);
-  } 
-  else if (rpaddle_d == -1) {
-    tft.fillRect(rpaddle_x, rpaddle_y + paddle_h - 1, paddle_w, 1, BLACK);
-  }
-
-  rpaddle_y = rpaddle_y + rpaddle_d;
-
-  if (ball_dx == -1) rpaddle_d = 0;
-  else {
-    if (rpaddle_y + paddle_h / 2 == target_y) rpaddle_d = 0;
-    else if (rpaddle_y + paddle_h / 2 > target_y) rpaddle_d = -1;
-    else rpaddle_d = 1;
-  }
-
-  if (rpaddle_y + paddle_h >= h && rpaddle_d == 1) rpaddle_d = 0;
-  else if (rpaddle_y <= 0 && rpaddle_d == -1) rpaddle_d = 0;
-
-  tft.fillRect(rpaddle_x, rpaddle_y, paddle_w, paddle_h, WHITE);
-}
-
-void calc_target_y() {
-  int16_t target_x;
-  int16_t reflections;
-  int16_t y;
-
-  if (ball_dx == 1) {
-    target_x = w - ball_w;
-  } 
-  else {
-    target_x = -1 * (w - ball_w);
-  }
-
-  y = abs(target_x * (ball_dy / ball_dx) + ball_y);
-
-  reflections = floor(y / h);
-
-  if (reflections % 2 == 0) {
-    target_y = y % h;
-  } 
-  else {
-    target_y = h - (y % h);
+            }
+            client.println("</body>");
+            client.println("</html>");
+            
+            // The HTTP response ends with another blank line
+            client.println();
+            // Break out of the while loop
+            break;
+          } else { // if you got a newline, then clear currentLine
+            currentLine = "";
+          }
+        } else if (c != '\r') {  // if you got anything else but a carriage return character,
+          currentLine += c;      // add it to the end of the currentLine
+        }
+      }
+    }
+    // Clear the header variable
+    header = "";
+    // Close the connection
+    client.stop();
+    Serial.println("Client disconnected.");
+    Serial.println("");
   }
 }
-
-void ball() {
-  ball_x = ball_x + ball_dx;
-  ball_y = ball_y + ball_dy;
-
-  if (ball_dx == -1 && ball_x == paddle_w && ball_y + ball_h >= lpaddle_y && ball_y <= lpaddle_y + paddle_h) {
-    ball_dx = ball_dx * -1;
-    dly = random(5); // change speed of ball after paddle contact
-    calc_target_y(); 
-  } else if (ball_dx == 1 && ball_x + ball_w == w - paddle_w && ball_y + ball_h >= rpaddle_y && ball_y <= rpaddle_y + paddle_h) {
-    ball_dx = ball_dx * -1;
-    dly = random(5); // change speed of ball after paddle contact
-    calc_target_y();
-  } else if ((ball_dx == 1 && ball_x >= w) || (ball_dx == -1 && ball_x + ball_w < 0)) {
-    dly = 5;
-  }
-
-  if (ball_y > h - ball_w || ball_y < 0) {
-    ball_dy = ball_dy * -1;
-    ball_y += ball_dy; // Keep in bounds
-  }
-
-  //tft.fillRect(oldball_x, oldball_y, ball_w, ball_h, BLACK);
-  tft.drawRect(oldball_x, oldball_y, ball_w, ball_h, BLACK); // Less TFT refresh aliasing than line above for large balls
-  tft.fillRect(   ball_x,    ball_y, ball_w, ball_h, WHITE);
-  oldball_x = ball_x;
-  oldball_y = ball_y;
-}
-
