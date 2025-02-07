@@ -5,6 +5,7 @@
 //and also demonstrate that SerialBT have the same functionalities of a normal Serial
 #include "EEPROM.h"
 #include "Button2.h"
+#include "DigiPot.h"
 #include "BluetoothSerial.h"
 
 // TFT start 
@@ -46,6 +47,8 @@ bool plusShown = false;
 Button2 btn1(BUTTON_1);
 Button2 btn2(BUTTON_2);
 
+DigiPot potmeter(25,26,27);
+
 #if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
 #error Bluetooth is not enabled! Please run `make menuconfig` to and enable it
 #endif
@@ -67,6 +70,8 @@ void setup() {
   }
   Serial.println(" bytes read from Flash . Values are:");
   dimLevel = byte(EEPROM.read(EE_LAST_DIM_IDX));
+  //potmeter.doCalibrate();
+  potmeter.setValue(dimLevel);
   Serial.println("Stored dimlevel: " + String(dimLevel)+ "\r\n");
  
   SerialBT.begin(device_name); //Bluetooth device name
@@ -106,7 +111,7 @@ void loop() {
     } else {
       led = 0;
     }
-    Serial.println("LED " + String(led));
+    //Serial.println("LED " + String(led));
     uint8_t byteArray[6] =  "led 0";
     byteArray[4] = 0x30 + led; // '0' or '1'
     byteArray[5] = 0x0A; //LF
@@ -213,6 +218,7 @@ void ParseData(uint8_t inval)
             }
           }else{
             dimLevel = VALUE;
+            potmeter.setValue(dimLevel);
           }
           Serial.println("Writing " + String(dimLevel) + " to EEPROM");
           EEPROM.write(EE_LAST_DIM_IDX,dimLevel);
@@ -267,6 +273,7 @@ void button_init()
       EEPROM.write(EE_LAST_DIM_IDX,dimLevel);
       EEPROM.commit();
       SendInitialDimLevel();
+      potmeter.setValue(dimLevel);
     });
     btn1.setDoubleClickHandler([](Button2 & b) {
       stopUpdateRemoteDimlevel = true;
@@ -278,6 +285,7 @@ void button_init()
       EEPROM.write(EE_LAST_DIM_IDX,dimLevel);
       EEPROM.commit();
       SendInitialDimLevel();
+      potmeter.setValue(dimLevel);
     });
 
     btn2.setClickHandler([](Button2 & b) {
@@ -290,6 +298,7 @@ void button_init()
       EEPROM.write(EE_LAST_DIM_IDX,dimLevel);
       EEPROM.commit();
       SendInitialDimLevel();
+      potmeter.setValue(dimLevel);
     });
     
     btn2.setDoubleClickHandler([](Button2 & b) {
@@ -302,6 +311,7 @@ void button_init()
       EEPROM.write(EE_LAST_DIM_IDX,dimLevel);
       EEPROM.commit();
       SendInitialDimLevel();
+      potmeter.setValue(dimLevel);
     });
 }
 
