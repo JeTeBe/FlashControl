@@ -70,7 +70,7 @@ void setup() {
   }
   Serial.println(" bytes read from Flash . Values are:");
   dimLevel = byte(EEPROM.read(EE_LAST_DIM_IDX));
-  //potmeter.doCalibrate();
+  //potmeter.doCalibrate();  // Calibrating is done on startup
   potmeter.setValue(dimLevel);
   Serial.println("Stored dimlevel: " + String(dimLevel)+ "\r\n");
  
@@ -106,34 +106,37 @@ char* ConvertStringToCharArray(String S)
 void loop() {
   if (interval == 50) {
     interval = 0;
-    if (led == 0) {
-      led = 1;
-    } else {
-      led = 0;
-    }
+    if (led == 0) { led = 1; } else { led = 0;}
     //Serial.println("LED " + String(led));
     uint8_t byteArray[6] =  "led 0";
     byteArray[4] = 0x30 + led; // '0' or '1'
     byteArray[5] = 0x0A; //LF
     SerialBT.write(byteArray, 6);
-    if (SerialBT.connected()) {
+    if (SerialBT.connected()) 
+    {
       if (firstTimeBT == 0)
       {
         SendInitialDimLevel();
         Serial.println("Send Initial");
         firstTimeBT = 1;
       }
-    } else {
+    } 
+    else 
+    {
       firstTimeBT = 0;
     }
-  } else {
+  } 
+  else 
+  {
     interval = interval + 1;
   }
 
-  if (Serial.available()) {
+  if (Serial.available()) 
+  {
     SerialBT.write(Serial.read());
   }
-  if (SerialBT.available()) {
+  if (SerialBT.available()) 
+  {
     uint8_t receivedData = SerialBT.read();
     ParseData(receivedData);
   }
@@ -155,7 +158,8 @@ void loop() {
   uint8_t ucArray[6] =  "2 000";
   fillDimLevel( dimLevel, &(ucArray[2]));
   ucArray[5] = 0x0A; //LF
-  if (SerialBT.available()) {
+  if (SerialBT.available()) 
+  {
     SerialBT.write(ucArray, 6);
   }
   button_loop();
@@ -206,23 +210,28 @@ void ParseData(uint8_t inval)
     case GET_VALUE:
       if (inval == 10) // LF end of value, start of next ID
       {
+        Serial.println("Value 1: " + String(VALUE) + " Dimlevel: " + String(dimLevel) + " stopUpdate: " + String(stopUpdateRemoteDimlevel));
         state = GET_ID;
         if (VALUE != dimLevel)
         {
           oldDimLevel = dimLevel;
-          if (stopUpdateRemoteDimlevel == true){
+          dimLevel = VALUE;
+          potmeter.setValue(dimLevel);
+          Serial.println("Writing 1 " + String(dimLevel) + " to EEPROM");
+          EEPROM.write(EE_LAST_DIM_IDX,dimLevel);
+          EEPROM.commit();
+        } 
+        else
+        {
+          Serial.println("Value 2: " + String(VALUE) + " Dimlevel: " + String(dimLevel) + " stopUpdate: " + String(stopUpdateRemoteDimlevel));
+          if (stopUpdateRemoteDimlevel == true)
+          {
             // Check if we see the command dimLevel back
             if (dimLevel == VALUE)
             {
               stopUpdateRemoteDimlevel = false;
             }
-          }else{
-            dimLevel = VALUE;
-            potmeter.setValue(dimLevel);
           }
-          Serial.println("Writing " + String(dimLevel) + " to EEPROM");
-          EEPROM.write(EE_LAST_DIM_IDX,dimLevel);
-          EEPROM.commit();
         }
         // Reset for next round
         VALUE = 0;
@@ -244,9 +253,12 @@ void showConnectionStatus()
   // Clear oldDimLevel
   tft.setTextColor(TFT_BLUE, TFT_BLUE);
   tft.setCursor( 200, 60 );
-  if (plusShown == true) {
+  if (plusShown == true) 
+  {
     tft.fillCircle(205, 72, 20, TFT_DARKGREEN);
-  } else {
+  } 
+  else 
+  {
     tft.fillCircle(205, 72, 20, TFT_GREEN );
   }
   plusShown = !plusShown;
@@ -255,21 +267,28 @@ void showConnectionStatus()
 void CalibratePotmeter()
 {
   Serial.print("Calibrating digital potentiometer ....");
+  //potmeter.doCalibrate(); // calibrating is done on startup
   Serial.println("Done.");
 }
 
 void button_init()
 {
-    btn1.setLongClickHandler([](Button2 & b) {
+    btn1.setLongClickHandler([](Button2 & b) 
+    {
       CalibratePotmeter();
     });
-    btn1.setClickHandler([](Button2 & b) {
+    btn1.setClickHandler([](Button2 & b) 
+    {
       stopUpdateRemoteDimlevel = true;
-      if (dimLevel < 100) {
+      if (dimLevel < 100) 
+      {
         dimLevel = dimLevel + 1;
-      }else{
+      }
+      else
+      {
         dimLevel = 100;
       }
+      Serial.println("Writing 2 " + String(dimLevel) + " to EEPROM");
       EEPROM.write(EE_LAST_DIM_IDX,dimLevel);
       EEPROM.commit();
       SendInitialDimLevel();
@@ -277,11 +296,15 @@ void button_init()
     });
     btn1.setDoubleClickHandler([](Button2 & b) {
       stopUpdateRemoteDimlevel = true;
-      if (dimLevel < 91) {
+      if (dimLevel < 91) 
+      {
         dimLevel = dimLevel + 10;
-      }else{
+      }
+      else
+      {
         dimLevel = 100;
       }
+      Serial.println("Writing 3 " + String(dimLevel) + " to EEPROM");
       EEPROM.write(EE_LAST_DIM_IDX,dimLevel);
       EEPROM.commit();
       SendInitialDimLevel();
@@ -290,11 +313,15 @@ void button_init()
 
     btn2.setClickHandler([](Button2 & b) {
       stopUpdateRemoteDimlevel = true;
-      if (dimLevel > 1) {
+      if (dimLevel > 1) 
+      {
         dimLevel = dimLevel - 1;
-      } else {
+      } 
+      else 
+      {
         dimLevel = 1;
       }
+      Serial.println("Writing 4 " + String(dimLevel) + " to EEPROM");
       EEPROM.write(EE_LAST_DIM_IDX,dimLevel);
       EEPROM.commit();
       SendInitialDimLevel();
@@ -303,11 +330,15 @@ void button_init()
     
     btn2.setDoubleClickHandler([](Button2 & b) {
       stopUpdateRemoteDimlevel = true;
-      if (dimLevel > 10) {
+      if (dimLevel > 10) 
+      {
         dimLevel = dimLevel - 10;
-      } else {
+      } 
+      else 
+      {
         dimLevel = 1;
       }
+      Serial.println("Writing 5 " + String(dimLevel) + " to EEPROM");
       EEPROM.write(EE_LAST_DIM_IDX,dimLevel);
       EEPROM.commit();
       SendInitialDimLevel();
