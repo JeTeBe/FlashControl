@@ -14,8 +14,8 @@
 DigiPot::DigiPot(byte pinChipSelect, byte pinUpDown, byte pinIncrement) 
 {
   pinCS = pinChipSelect;
-  pinINC = pinUpDown;
-  pinUD = pinIncrement;
+  pinUD = pinUpDown;
+  pinINC = pinIncrement;
   pinMode(pinCS, OUTPUT);
   digitalWrite(pinCS, HIGH);
   pinMode(pinINC, OUTPUT);
@@ -44,7 +44,18 @@ void DigiPot::setValue(uint8_t value)
     // No value set first calibrate
     doCalibrate();
     Serial.println("CALIBRATING");
+    // Wiper down
+    digitalWrite(pinINC, HIGH);
+    delay(1);
+    digitalWrite(pinCS, LOW);
+    delay(1);
+    digitalWrite(pinUD, LOW);
+    delay(1);
+    digitalWrite(pinINC, LOW);
+    Serial.println("Wiper down");
   }
+
+  
   // Now we are in the position to goto the new value.
   if (value == StoredValue)
   {
@@ -56,16 +67,19 @@ void DigiPot::setValue(uint8_t value)
   delay(1);
   
   // Do we have to go up or down.
-  if (value < StoredValue)
+  if (value > StoredValue)
   {
     // We have to go up.
     digitalWrite(pinUD, HIGH);
     delay(1);
+    Serial.println("UP");
   } else {
     // We have to go down.
     digitalWrite(pinUD, LOW);
     delay(1);
+    Serial.println("DOWN");
   }
+  Serial.println("Steps: " + String( abs(value - StoredValue) ));
   for (int i = 0; i < (abs(value - StoredValue)); i++)
   {
     digitalWrite(pinINC, LOW);
@@ -73,9 +87,10 @@ void DigiPot::setValue(uint8_t value)
     digitalWrite(pinINC, HIGH);    
     delay(1);
   }
+  delay(20);
   // We are done, disable chip
   digitalWrite(pinCS, HIGH);
-  delay(1);
+ 
   StoredValue = value;
 }
     

@@ -27,12 +27,12 @@ class DigiPot {
     byte    pinINC;
     byte    pinUD;
     void    doCalibrate(); 
+    uint8_t StoredValue;
    
   public:
     DigiPot(byte pinChipSelect, byte pinUpDown, byte pinIncrement);
     void    setStoredValue(uint8_t value);
     void    setValue(uint8_t value);
-    uint8_t StoredValue;
 
 };
 /////////////////////////////////////////////////////////////////
