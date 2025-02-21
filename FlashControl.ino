@@ -143,15 +143,15 @@ void loop() {
   delay(20);
   if (oldDimLevel != dimLevel)
   {
-    tft.setTextSize(7);
+    tft.setTextSize(6);
     // Clear oldDimLevel
     tft.setTextColor(TFT_BLUE, TFT_BLUE);
     tft.setCursor( 50, 50 );
-    tft.print(String(oldDimLevel));
+    tft.print(ConvertToPerc(oldDimLevel));
     // Set dimLevel
     tft.setTextColor(TFT_WHITE, TFT_BLUE);
     tft.setCursor( 50, 50 );
-    tft.print(String(dimLevel));
+    tft.print(ConvertToPerc(dimLevel));
     oldDimLevel = dimLevel;
   }
   
@@ -163,6 +163,11 @@ void loop() {
     SerialBT.write(ucArray, 6);
   }
   button_loop();
+}
+
+String ConvertToPerc(uint8_t value)
+{
+  return String( 11.5 + value * 0.885) + "%";
 }
 
 void SendInitialDimLevel()
